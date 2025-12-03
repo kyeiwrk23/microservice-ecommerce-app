@@ -1,0 +1,89 @@
+#spring:
+#  # Routing logic
+#  # It can be changed to Java code for dynamic routing
+#  cloud:
+#    gateway:
+#      server:
+#        webflux:
+#         routes:
+#          - id: product
+#            uri: lb://product
+#            predicates:
+#              - Path=/api/products/**
+#
+#          - id: user
+#            uri: lb://user
+#            predicates:
+#              - Path=/api/users/**, /api/user/**
+#
+#          - id: order
+#            uri: lb://order
+#            predicates:
+#              - Path=/api/cart/**, /api/orders/**
+#
+#          - id: eureka-server
+#            uri: http://localhost:8761
+#            predicates:
+#              - Path=/eureka/main
+#            filters:
+#              - SetPath=/
+#
+#          - id: eureka-server-static
+#            uri: http://localhost:8761
+#            predicates:
+#              - Path=/eureka/**
+
+#  change the uri from using the ports as stated below to using service names as used above
+#  http://localhost:8183 ,http://localhost:8182 , http://localhost:8181
+
+server:
+  port: 8080
+
+#logging:
+#  level:
+#    root: info
+#    org.springframework.cloud.gateway.route.RouteDefinitionLocator: info
+#    org.springframework.cloud.gateway: Trace
+
+# For Actuators and zipkin
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+
+  #  show health details
+  endpoint:
+    health:
+      show-details: always
+
+
+  # show health details for circuitbreaker
+  health:
+    circuitbreakers:
+      enabled: true
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      gatewayBreaker:
+        register-health-indicator: true
+        minimum-number-of-calls: 5
+        sliding-window-size: 10
+        permitted-number-of-calls-in-half-open-state: 3
+        wait-duration-in-open-state:
+          seconds: 10
+        failure-rate-threshold: 50
+        automatic-transition-from-open-to-half-open-enabled: true
+        sliding-window-type: count_based
+
+
+
+
+  tracing:
+    sampling:
+      probability: 1.0
+
+
+
+

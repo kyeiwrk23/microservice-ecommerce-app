@@ -1,0 +1,46 @@
+spring:
+  application:
+    name: notification
+
+#  config:
+#    import: optional:configserver:http://localhost:8888
+
+#  # RabbitMQ
+#  rabbitmq:
+#    host: localhost
+#    port: 5672
+#    username: guest
+#    password: guest
+#    template:
+#      exchange: order.exchange   # Exchange name
+#      default-receive-queue: order.queue  # queue name
+#      routing-key: order.tracking #routing key name
+#
+##spring cloud streams for rabbitMQ
+#  cloud:
+#    function:
+#      definition: orderCreatedEventConsumer
+#    stream:
+#      bindings:
+#        orderCreatedEventConsumer-in-0:
+#          destination: order.exchange
+#          group: notification-group
+#          content-type: application/json
+
+  #spring cloud streams for kafka
+  cloud:
+    function:
+      definition: orderCreatedEventConsumer
+    stream:
+      bindings:
+        orderCreatedEventConsumer-in-0:
+          destination: order.exchange
+          group: notification-group
+          content-type: application/json
+      kafka:
+        binder:
+          brokers: localhost:9092
+
+server:
+  port: 8184
+

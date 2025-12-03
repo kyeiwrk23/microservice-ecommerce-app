@@ -1,0 +1,44 @@
+spring:
+  expirationMs: 36000000
+  secreteKey: dftyghujkiolijuhgfdsfghjkiuytredfghjuytrfdghjuytrfdgvhjuytrfghjyutrdfghytrdfghytrfdvghjytrfdcfghjgfd
+  cookieName: ecomcokie
+
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/userdb
+      database: userdb
+
+server:
+  port: 8181
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: http://localhost:8761/eureka
+
+logging:
+  level:
+    root: INFO
+#    or if you want to apply trace on a particular package or project
+    com.kay.userprofile.security: TRACE
+  file:
+    name: logs/${spring.application.name}.log
+  logback:
+    rollingpolicy:
+      max-file-size: 5MB
+      max-history: 7
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+
+# For Zipkin
+  tracing:
+    sampling:
+      probability: 1.0
+
+

@@ -1,0 +1,129 @@
+spring:
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/MicrOrder
+    username: postgres
+    password: 23Cel
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgresPlusDialect
+
+# Spring cloud stream
+
+
+## RabbitMQ
+#  rabbitmq:
+#    host: localhost
+#    port: 5672
+#    username: guest
+#    password: guest
+#    template:
+#      exchange: order.exchange   # Exchange name
+#      default-receive-queue: order.queue  # queue name
+#      routing-key: order.tracking #routing key name
+
+
+  # Spring Cloud Stream with Kafka
+  cloud:
+    stream:
+      bindings:
+        placeOrder-out-0:
+          destination: order.exchange
+          content-type: application/json
+      kafka:
+        binder:
+          brokers: localhost:9092
+
+
+## Spring Cloud Stream with RabbitMQ
+#  cloud:
+#    stream:
+#      bindings:
+#        placeOrder-out-0:
+#          destination: order.exchange
+#          content-type: application/json
+#
+##spring cloud streams for rabbit
+#      rabbit:
+#        bindings:
+#          placeOrder-out-0:
+#            producer:
+#              routing-key-expression: '''order.tracking'''
+
+
+server:
+  port: 8183
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: http://localhost:8761/eureka
+
+# For logging
+logging:
+  file:
+    name: logs/${spring.application.name}.log
+  logback:
+    rolling policy:
+      max-file-size: 5MB
+      max-history: 7
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+
+#  show health details
+  endpoint:
+    health:
+      show-details: always
+
+# show health details for circuitbreaker
+  health:
+    circuitbreakers:
+      enabled: true
+
+# Circuit Breaker
+resilience4j:
+  circuitbreaker:
+    instances:
+      product:
+        register-health-indicator: true
+        minimum-number-of-calls: 5
+        sliding-window-size: 10
+        permitted-number-of-calls-in-half-open-state: 3
+        wait-duration-in-open-state: 10s
+        failure-rate-threshold: 50
+        automatic-transition-from-open-to-half-open-enabled: true
+        sliding-window-type: count_based
+
+# For retry
+  retry:
+    instances:
+      retryBreaker:
+        max-attempts: 5
+        wait-duration:
+          seconds: 5s
+
+# For rate Limiting
+  ratelimiter:
+    instances:
+      rateLimitBreaker:
+        timeout-duration:
+          seconds: 0
+        limit-refresh-period:
+          seconds: 4
+        limit-for-period: 2
+
+
+# For Zipkin
+  tracing:
+    sampling:
+      probability: 1.0
