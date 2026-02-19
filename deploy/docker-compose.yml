@@ -1,0 +1,567 @@
+services:
+
+  configserver:
+    build: ../configserver
+    container_name: configserver
+    environment:
+      - SPRING_PROFILES_ACTIVE=native
+      - SPRING_CLOUD_CONFIG_SERVER_NATIVE_SEARCH_LOCATIONS=/config
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./../configserver/src/main/resources/config:/config
+    depends_on:
+     - eureka
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost:8888/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: on-failure
+    networks:
+      - backend
+
+  eureka:
+    build: ../eureka-server
+    container_name: eureka
+    ports:
+      - "8761:8761"
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost:8761/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: on-failure
+
+  gateway:
+    build: ../gateway
+    container_name: gateway
+    env_file:
+      - .env
+    ports:
+      - "8081:8081"
+    networks:
+      - backend
+    depends_on:
+      configserver:
+        condition: service_healthy
+      eureka:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      zipkin:
+        condition: service_started
+      redis:
+        condition: service_started
+
+
+  order:
+    build: ../Order
+    container_name: order
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_USER=${DB_USERNAME}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    ports:
+      - "8183:8183"
+    networks:
+      - backend
+    depends_on:
+      kafka:
+        condition: service_started
+      zipkin:
+        condition: service_started
+      eureka:
+        condition: service_healthy
+      postgres:
+        condition: service_started
+      prometheus:
+        condition: service_started
+      grafana:
+        condition: service_started
+      configserver:
+        condition: service_healthy
+    restart: on-failure
+
+  notification:
+    build: ../notification
+    container_name: notification
+    env_file:
+      - .env
+    ports:
+      - "8185:8185"
+    networks:
+      - backend
+    depends_on:
+      kafka:
+        condition: service_started
+      zipkin:
+        condition: service_started
+      eureka:
+        condition: service_healthy
+      prometheus:
+        condition: service_started
+      grafana:
+        condition: service_started
+      configserver:
+        condition: service_healthy
+    restart: on-failure
+
+  product:
+    build: ../Product
+    container_name: product
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_USER=${DB_USERNAME}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    ports:
+      - "8182:8182"
+    networks:
+      - backend
+    depends_on:
+      kafka:
+        condition: service_started
+      configserver:
+        condition: service_healthy
+      eureka:
+        condition: service_healthy
+      zipkin:
+        condition: service_started
+      prometheus:
+        condition: service_started
+      postgres:
+        condition: service_started
+      grafana:
+        condition: service_started
+    restart: on-failure
+
+  user:
+    build: ../user-profile
+    container_name: user
+    env_file:
+      - .env
+    ports:
+      - "8181:8181"
+    networks:
+      - backend
+
+    depends_on:
+      kafka:
+        condition: service_started
+      configserver:
+        condition: service_healthy
+      eureka:
+        condition: service_healthy
+      zipkin:
+        condition: service_started
+      prometheus:
+        condition: service_started
+      mongo:
+        condition: service_started
+      grafana:
+        condition: service_started
+
+  payment:
+    build: ../Payment
+    container_name: payment
+    env_file:
+      - .env
+    environment:
+        POSTGRES_USER: ${DB_USERNAME}
+        POSTGRES_PASSWORD: ${DB_PASSWORD}
+        STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+        STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET_KEY}
+    ports:
+      - "8184:8184"
+    networks:
+      - backend
+    depends_on:
+      kafka:
+        condition: service_started
+      configserver:
+        condition: service_healthy
+      eureka:
+        condition: service_healthy
+      zipkin:
+        condition: service_started
+      prometheus:
+        condition: service_started
+      postgres:
+        condition: service_started
+      grafana:
+        condition: service_started
+    restart: on-failure
+
+
+  postgres:
+    container_name: postgres
+    image: postgres:13
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      PGDATA: /data/postgres
+    volumes:
+      - postgres:/data/postgres
+      - ./create-db.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - backend
+    restart: unless-stopped
+
+  pgadmin:
+    container_name: pgadmin
+    image: dpage/pgadmin4:snapshot
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-pgadmin@admin.org}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    volumes:
+      - pgadmin:/var/bin/pgadmin
+    ports:
+      - "5050:80"
+    networks:
+      - backend
+    restart: unless-stopped
+
+  keycloak:
+    container_name: keycloak
+    image: quay.io/keycloak/keycloak:26.4.7
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD}
+      KC_BOOTSTRAP_IMPORT: /opt/keycloak/data/import/realm-export.json
+    command: ["start-dev","--import-realm"]
+    volumes:
+      - ./keycloak/keycloak-backups/realm-export-ecom-app.json:/opt/keycloak/data/import/realm-export.json
+    networks:
+      - backend
+    restart: on-failure
+
+  mongo:
+    container_name: mongodb
+    image: mongodb/mongodb-community-server:latest
+    ports:
+      - "27017:27017"
+    networks:
+      - backend
+
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      # KRaft mode settings
+       KAFKA_NODE_ID: 1
+       KAFKA_PROCESS_ROLES: "broker,controller"
+       KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+       KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+
+      # Listeners
+       KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
+       KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
+       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
+       KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+
+      # Single-node development setting
+       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+
+    volumes:
+       - kafka_data:/bitnami/kafka/data
+
+    networks:
+      - backend
+
+  stripe:
+    image: stripe/stripe-cli
+    container_name: stripe
+    env_file:
+      - .env
+    command: >
+      listen
+      --api-key ${STRIPE_SECRET_KEY}
+      --forward-to http://payment:8184/api/payments/webhook
+    environment:
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+    networks:
+      - backend
+    depends_on:
+      - payment
+
+
+  read:
+    image: grafana/loki:latest
+    command: "-config.file=/etc/loki/config.yaml -target=read"
+    ports:
+      - 3101:3100
+      - 7946
+      - 9095
+    volumes:
+      - ./logging/loki-config.yaml:/etc/loki/config.yaml
+    depends_on:
+      - minio
+    healthcheck:
+      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: &loki-dns
+      loki:
+        aliases:
+          - loki
+
+  write:
+    image: grafana/loki:latest
+    command: "-config.file=/etc/loki/config.yaml -target=write"
+    ports:
+      - 3102:3100
+      - 7946
+      - 9095
+    volumes:
+      - ./logging/loki-config.yaml:/etc/loki/config.yaml
+    healthcheck:
+      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      - minio
+    networks:
+      <<: *loki-dns
+
+  alloy:
+    image: grafana/alloy:latest
+    volumes:
+      - ./logging/alloy-local-config.yaml:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ../../logs:/logs-parent:ro
+    command: run --server.http.listen-addr=0.0.0.0:12345 --storage.path=/var/lib/alloy/data /etc/alloy/config.alloy
+    ports:
+      - 12345:12345
+    depends_on:
+      - gateway-loki
+    networks:
+      - loki
+
+  minio:
+    image: minio/minio
+    entrypoint:
+      - sh
+      - -euc
+      - |
+        mkdir -p /data/loki-data && \
+        mkdir -p /data/loki-ruler && \
+        minio server /data
+    environment:
+      - MINIO_ROOT_USER=loki
+      - MINIO_ROOT_PASSWORD=supersecret
+      - MINIO_PROMETHEUS_AUTH_TYPE=public
+      - MINIO_UPDATE=off
+    ports:
+      - 9000
+    volumes:
+      - ./.data/minio:/data
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 15s
+      timeout: 20s
+      retries: 5
+    networks:
+      - loki
+
+
+
+  prometheus:
+    image: prom/prometheus:v2.44.0
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - loki
+
+  redis:
+    container_name: redis
+    image: redis:8.0-alpine3.21
+    ports:
+      - "6379:6379"
+    networks:
+      - backend
+
+  rabbitmq:
+    container_name: rabbitmq
+    image: rabbitmq:4.2.0-rc.1-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"      # RabbitMQ Message Broker
+      - "15672:15672"   # RabbitMQ Management UI (http://localhost:15672)
+    networks:
+      - loki
+    restart: unless-stopped
+
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    depends_on:
+      - gateway-loki
+    entrypoint:
+      - sh
+      - -euc
+      - |
+        mkdir -p /etc/grafana/provisioning/datasources
+        cat <<EOF > /etc/grafana/provisioning/datasources/ds.yaml
+        apiVersion: 1
+        datasources:
+          - name: Loki
+            type: loki
+            access: proxy
+            url: http://gateway-loki:3100
+            jsonData:
+              httpHeaderName1: "X-Scope-OrgID"
+            secureJsonData:
+              httpHeaderValue1: "tenant1"
+        EOF
+        /run.sh
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - loki
+    volumes:
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources
+
+  zipkin:
+    container_name: zipkin
+    image: openzipkin/zipkin:latest
+    ports:
+      - "9411:9411"
+    networks:
+      - loki
+      - backend
+    restart: unless-stopped
+
+  backend:
+    image: grafana/loki:latest
+    volumes:
+      - ./logging/loki-config.yaml:/etc/loki/config.yaml
+    ports:
+      - "3100"
+      - "7946"
+    command: "-config.file=/etc/loki/config.yaml -target=backend -legacy-read-mode=false"
+    depends_on:
+      - gateway-loki
+    networks:
+      - loki
+
+
+  gateway-loki:
+    image: nginx:latest
+    depends_on:
+      - read
+      - write
+    entrypoint:
+      - sh
+      - -euc
+      - |
+        cat <<EOF > /etc/nginx/nginx.conf
+        user  nginx;
+        worker_processes  5;  ## Default: 1
+
+        events {
+          worker_connections   1000;
+        }
+
+        http {
+          resolver 127.0.0.11;
+
+          server {
+            listen             3100;
+
+            location = / {
+              return 200 'OK';
+              auth_basic off;
+            }
+
+            location = /api/prom/push {
+              proxy_pass       http://write:3100\$$request_uri;
+            }
+
+            location = /api/prom/tail {
+              proxy_pass       http://read:3100\$$request_uri;
+              proxy_set_header Upgrade \$$http_upgrade;
+              proxy_set_header Connection "upgrade";
+            }
+
+            location ~ /api/prom/.* {
+              proxy_pass       http://read:3100\$$request_uri;
+            }
+
+            location = /loki/api/v1/push {
+              proxy_pass       http://write:3100\$$request_uri;
+            }
+
+            location = /loki/api/v1/tail {
+              proxy_pass       http://read:3100\$$request_uri;
+              proxy_set_header Upgrade \$$http_upgrade;
+              proxy_set_header Connection "upgrade";
+            }
+
+            location ~ /loki/api/.* {
+              proxy_pass       http://read:3100\$$request_uri;
+            }
+          }
+        }
+        EOF
+        /docker-entrypoint.sh nginx -g "daemon off;"
+    ports:
+      - "3100:3100"
+    healthcheck:
+      test: [ "CMD", "service", "nginx", "status" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - loki
+
+
+  flog:
+    image: mingrammer/flog
+    command: -f json -d 200ms -l
+    networks:
+      - loki
+
+
+
+networks:
+  backend:
+    driver: bridge
+  loki:
+    driver: bridge
+
+volumes:
+  postgres:
+  pgadmin:
+  kafka_data:

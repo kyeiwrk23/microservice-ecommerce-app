@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
-//@Component
+@Component
 public class LoggingFilter implements GlobalFilter{
     private static final Logger logger = LoggerFactory.getLogger(LoggingFilter.class);
 
@@ -20,7 +20,14 @@ public class LoggingFilter implements GlobalFilter{
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-        logger.info("Incoming request to: {}", exchange.getRequest().getPath());
+        logger.info("Incoming request to: {}", exchange.getRequest().getURI());
+
         return chain.filter(exchange);
+
     }
+
+
+
+
+
 }

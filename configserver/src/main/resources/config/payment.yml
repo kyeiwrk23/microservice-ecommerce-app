@@ -1,0 +1,75 @@
+spring:
+
+  datasource:
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: ${DB_DRIVER}
+    url: ${DB_URL}/payment
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: ${DB_DIALECT}
+    show-sql: true
+
+
+  # Spring Cloud Stream with Kafka
+  cloud:
+    function:
+      definition: handleWebhook
+    stream:
+      bindings:
+        handleWebhook-out-0:
+          destination: payment.completed
+          content-type: application/json
+      kafka:
+        binder:
+          brokers: kafka:9092
+
+server:
+  port: 8184
+
+# Eureka
+eureka:
+  client:
+    fetch-registry: true
+    register-with-eureka: true
+    service-url:
+      defaultZone: http://eureka:8761/eureka/
+
+
+# Stripe
+stripe.secretkey: ${STRIPE_SECRET_KEY}
+stripe.webhookSecretKey: ${STRIPE_WEBHOOK_SECRET_KEY}
+clientBaseUrl: https://localhost:8080
+
+# logging
+logging:
+  file:
+    name: logs/${spring.application.name}.log
+  logback:
+    rolling policy:
+      max-file-size: 5MB
+      max-history: 7
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+
+  # For Zipkin
+  tracing:
+    sampling:
+      probability: 1.0
+
+  zipkin:
+    tracing:
+      endpoint: http://zipkin:9411/api/v2/spans
+
+  #  show health details
+  endpoint:
+    health:
+      show-details: always

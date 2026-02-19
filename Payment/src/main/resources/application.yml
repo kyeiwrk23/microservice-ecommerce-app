@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: payment
+  main:
+    web-application-type: reactive
+
+
+  config:
+    import: optional:configserver:http://configserver:8888
+
+
+
+
+
+
+
+
